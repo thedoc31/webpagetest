@@ -213,8 +213,10 @@ function loadPageStepData($localPaths, $runCompleted, $testInfo = null) {
             $ret['lastVisualChange'] = $ret['visualComplete'];
         }
       }
-      // see if we need a custom Speed Index as well
-      if (isset($ret) && is_array($ret) && isset($ret['fullyLoaded']) && $ret['fullyLoaded']) {
+      // Calculate the timeline-based CPU times
+      if (isset($ret) && is_array($ret) &&
+          !isset($ret['cpuTimes']) &&
+          isset($ret['fullyLoaded']) && $ret['fullyLoaded']) {
         $processing = GetDevToolsCPUTimeForStep($localPaths, $ret['fullyLoaded']);
         if (isset($processing) && is_array($processing) && count($processing)) {
           $ret['cpuTimes'] = $processing;
@@ -408,8 +410,14 @@ function loadPageStepData($localPaths, $runCompleted, $testInfo = null) {
 
     // see if there is test-level lighthouse data to attach
     // Don't cache the lighthouse bit because the file may come in after other results are cached
+    $lighthouse_audits_file = $localPaths->lighthouseAuditsFile();
     $lighthouse_file = $localPaths->lighthouseJsonFile();
-    if (gz_is_file($lighthouse_file)) {
+    if (gz_is_file($lighthouse_audits_file)) {
+      $audits = json_decode(gz_file_get_contents($lighthouse_audits_file), true);
+      foreach ($audits as $name => $value) {
+        $ret["lighthouse.$name"] = $value;
+      }
+    } elseif (gz_is_file($lighthouse_file)) {
       $lighthouse = json_decode(gz_file_get_contents($lighthouse_file), true);
       if (isset($lighthouse) && is_array($lighthouse)) {
         if (isset($lighthouse['aggregations'])) {

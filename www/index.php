@@ -100,7 +100,7 @@ $loc = ParseLocations($locations);
             <input type="hidden" name="lighthouseTrace" value="1">
             
             <?php
-            echo "<input type=\"hidden\" name=\"vo\" value=\"$owner\">\n";
+            echo '<input type="hidden" name="vo" value="' . htmlspecialchars($owner) . "\">\n";
             if( strlen($secret) ){
               $hashStr = $secret;
               $hashStr .= $_SERVER['HTTP_USER_AGENT'];
@@ -159,6 +159,8 @@ $loc = ParseLocations($locations);
               echo '<input type="hidden" name="discard_timeline" value="' . htmlspecialchars($_REQUEST['discard_timeline']) . "\">\n";
             if (isset($_REQUEST['htmlbody']))
               echo '<input type="hidden" name="htmlbody" value="' . htmlspecialchars($_REQUEST['htmlbody']) . "\">\n";
+            if (isset($_REQUEST['disable_video']))
+              echo '<input type="hidden" name="disable_video" value="' . htmlspecialchars($_REQUEST['disable_video']) . "\">\n";
             ?>
 
             <h2 class="cufon-dincond_black">Test a website's performance</h2>

@@ -38,6 +38,12 @@ fullSizeVideoOn=1
 ;Full Size Video - default checkbox state - ticked (1) or unticked (0)
 fullSizeVideoDefault=0
 
+; Disable all video capture and processing when tests do not opt for video.
+; Usually the agents will still capture video to calculate the visual metrics
+; but the video will not be uploaded. With strict_video enabled, tests without
+; video capture will not get visual metrics.
+;strict_video=1
+
 ; Run tests concurrently across test machines
 ;shard_tests=1
 
@@ -93,6 +99,9 @@ maxNavigateCount=20
 ; This is mostly used when the pages are behind authentication and need another path
 ; for processing background tasks.
 ;local_server=http://127.0.0.1
+
+; Default API key to use across all locations
+;location_key=AlphaNumericKey
 
 ; disable gzip compressing the result text files
 ;nogzip=1
