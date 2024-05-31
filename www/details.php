@@ -1,206 +1,166 @@
 <?php
-include 'common.inc';
-require_once('object_detail.inc');
-require_once('page_data.inc');
-require_once('waterfall.inc');
 
-require_once __DIR__ . '/include/TestInfo.php';
-require_once __DIR__ . '/include/TestRunResults.php';
-require_once __DIR__ . '/include/RunResultHtmlTable.php';
-require_once __DIR__ . '/include/UserTimingHtmlTable.php';
-require_once __DIR__ . '/include/WaterfallViewHtmlSnippet.php';
-require_once __DIR__ . '/include/ConnectionViewHtmlSnippet.php';
-require_once __DIR__ . '/include/RequestDetailsHtmlSnippet.php';
-require_once __DIR__ . '/include/RequestHeadersHtmlSnippet.php';
-require_once __DIR__ . '/include/AccordionHtmlHelper.php';
+// Copyright 2020 Catchpoint Systems Inc.
+// Use of this source code is governed by the Polyform Shield 1.0.0 license that can be
+// found in the LICENSE.md file.
+include 'common.inc';
+require_once INCLUDES_PATH . '/object_detail.inc';
+require_once INCLUDES_PATH . '/page_data.inc';
+require_once INCLUDES_PATH . '/waterfall.inc';
+
+// Prevent the details page from running out of control.
+set_time_limit(30);
+
+require_once INCLUDES_PATH . '/include/TestInfo.php';
+require_once INCLUDES_PATH . '/include/TestResults.php';
+require_once INCLUDES_PATH . '/include/TestRunResults.php';
+require_once INCLUDES_PATH . '/include/RunResultHtmlTable.php';
+require_once INCLUDES_PATH . '/include/WaterfallViewHtmlSnippet.php';
+require_once INCLUDES_PATH . '/include/ConnectionViewHtmlSnippet.php';
+require_once INCLUDES_PATH . '/include/RequestDetailsHtmlSnippet.php';
+require_once INCLUDES_PATH . '/include/RequestHeadersHtmlSnippet.php';
+require_once INCLUDES_PATH . '/include/AccordionHtmlHelper.php';
 
 $testInfo = TestInfo::fromFiles($testPath);
+$testResults = TestResults::fromFiles($testInfo);
 $testRunResults = TestRunResults::fromFiles($testInfo, $run, $cached, null);
 $data = loadPageRunData($testPath, $run, $cached, $test['testinfo']);
+$pageData = loadAllPageData($testPath);
 $isMultistep = $testRunResults->countSteps() > 1;
 
-$page_keywords = array('Performance Test','Details','Webpagetest','Website Speed Test','Page Speed');
+$page_keywords = array('Performance Test', 'Details', 'WebPageTest', 'Website Speed Test', 'Page Speed');
 $page_description = "Website performance test details$testLabel";
+
+function createForm($formName, $btnText, $id, $owner, $secret)
+{
+    echo "<form name='$formName' id='$formName' action='/runtest.php?test=$id' method='POST' enctype='multipart/form-data'>";
+    echo "\n<input type=\"hidden\" name=\"resubmit\" value=\"$id\">\n";
+    echo '<input type="hidden" name="vo" value="' . htmlspecialchars($owner) . "\">\n";
+    if (strlen($secret)) {
+        $hashStr = $secret;
+        $hashStr .= $_SERVER['HTTP_USER_AGENT'];
+        $hashStr .= $owner;
+
+        $now = gmdate('c');
+        echo "<input type=\"hidden\" name=\"vd\" value=\"$now\">\n";
+        $hashStr .= $now;
+
+        $hmac = sha1($hashStr);
+        echo "<input type=\"hidden\" name=\"vh\" value=\"$hmac\">\n";
+    }
+    echo "<input type=\"submit\" value=\"$btnText\">";
+    echo "\n</form>\n";
+}
+
 ?>
 <!DOCTYPE html>
-<html>
-    <head>
-        <title>WebPagetest Test Details<?php echo $testLabel; ?></title>
-        <?php $gaTemplate = 'Details'; include ('head.inc'); ?>
-        <style type="text/css">
-        div.bar {
-            height:12px;
-            margin-top:auto;
-            margin-bottom:auto;
-        }
+<html lang="en-us">
 
-        .left {text-align:left;}
-        .center {text-align:center;}
+<head>
+    <title><?php echo "$page_title - WebPageTest Details"; ?></title>
+    <script>
+        document.documentElement.classList.add('has-js');
+    </script>
 
-        .indented1 {padding-left: 40pt;}
-        .indented2 {padding-left: 80pt;}
+    <?php include('head.inc'); ?>
+</head>
 
-        td {
-            white-space:nowrap;
-            text-align:left;
-            vertical-align:middle;
-        }
+<body class="result result-details">
+    <?php
+    $tab = 'Test Result';
+    $subtab = 'Details';
+    include 'header.inc';
 
-        td.center {
-            text-align:center;
-        }
+    ?>
 
-        table.details {
-          margin-left:auto; margin-right:auto;
-          background: whitesmoke;
-          border-collapse: collapse;
-        }
-        table.details th, table.details td {
-          border: 1px silver solid;
-          padding: 0.2em;
-          text-align: center;
-          font-size: smaller;
-        }
-        table.details th {
-          background: gainsboro;
-        }
-        table.details caption {
-          margin-left: inherit;
-          margin-right: inherit;
-          background: whitesmoke;
-        }
-        table.details th.reqUrl, table.details td.reqUrl {
-          text-align: left;
-          width: 30em;
-          word-wrap: break-word;
-        }
-        table.details td.even {
-          background: gainsboro;
-        }
-        table.details td.odd {
-          background: whitesmoke;
-        }
-        table.details td.evenRender {
-          background: #dfffdf;
-        }
-        table.details td.oddRender {
-          background: #ecffec;
-        }
-        table.details td.evenDoc {
-          background: #dfdfff;
-        }
-        table.details td.oddDoc {
-          background: #ececff;
-        }
-        table.details td.warning {
-          background: #ffff88;
-        }
-        table.details td.error {
-          background: #ff8888;
-        }
-        .header_details {
-            display: none;
-        }
-        .a_request {
-            cursor: pointer;
-        }
+    <div class="results_main_contain">
+        <div class="results_main">
 
-        <?php
-        include __DIR__ . "/css/accordion.css";
-        include "waterfall.css";
-        ?>
-        </style>
-    </head>
-    <body>
-        <div class="page">
-            <?php
-            $tab = 'Test Result';
-            $subtab = 'Details';
-            include 'header.inc';
-            ?>
 
-            <div id="result">
-                <div id="download">
-                    <div id="testinfo">
-                        <?php
-                        echo GetTestInfoHtml();
-                        ?>
-                    </div>
-                    <?php
-                        echo '<a href="/export.php?' . "test=$id&run=$run&cached=$cached&bodies=1&pretty=1" . '">Export HTTP Archive (.har)</a>';
-                        if ( is_dir('./google') && array_key_exists('enable_google_csi', $settings) && $settings['enable_google_csi'] )
-                            echo '<br><a href="/google/google_csi.php?' . "test=$id&run=$run&cached=$cached" . '">CSI (.csv) data</a>';
-                        if (array_key_exists('custom', $data) && is_array($data['custom']) && count($data['custom']))
-                            echo '<br><a href="/custom_metrics.php?' . "test=$id&run=$run&cached=$cached" . '">Custom Metrics</a>';
-                        if( is_file("$testPath/{$run}{$cachedText}_dynaTrace.dtas") )
-                        {
-                            echo "<br><a href=\"/$testPath/{$run}{$cachedText}_dynaTrace.dtas\">Download dynaTrace Session</a>";
-                            echo ' (<a href="https://www.dynatrace.com/topics/ajax-edition/" target="_blank">get dynaTrace</a>)';
-                        }
-                        if( is_file("$testPath/{$run}{$cachedText}_bodies.zip") )
-                            echo "<br><a href=\"/$testPath/{$run}{$cachedText}_bodies.zip\">Download Response Bodies</a>";
-                        echo '<br>';
-                    ?>
+            <div class="results_and_command">
+
+                <div class="results_header">
+                    <h2>Requests Details</h2>
+                    <p>Use this page to explore the metric timings and request waterfall for any run of your test.</p>
                 </div>
-                <div class="cleared"></div>
-                <br>
+
+
+            </div>
+
+
+            <div id="result" class="results_body">
 
                 <?php
-                  $htmlTable = new RunResultHtmlTable($testInfo, $testRunResults);
-                  echo $htmlTable->create();
-                ?>
-                <br>
-                <?php
-                if( is_dir('./google') && isset($test['testinfo']['extract_csi']) )
-                {
-                    require_once('google/google_lib.inc');
-                ?>
-                    <h2>Csi Metrics</h2>
-                            <table id="tableCustomMetrics" class="pretty" align="center" border="1" cellpadding="10" cellspacing="0">
-                               <tr>
-                            <?php
-                                if ($isMultistep) {
-                                    echo '<th align="center" class="border" valign="middle">Step</th>';
-                                }
-                                foreach ( $test['testinfo']['extract_csi'] as $csi_param )
-                                    echo '<th align="center" class="border" valign="middle">' . $csi_param . '</th>';
-                                echo "</tr>\n";
-                                foreach ($testRunResults->getStepResults() as $stepResult) {
-                                    echo "<tr>\n";
-                                    if (GetSetting('enable_csi'))
-                                      $params = ParseCsiInfoForStep($stepResult->createTestPaths(), true);
-                                    if ($isMultistep) {
-                                        echo '<td class="even" valign="middle">' . $stepResult->readableIdentifier() . '</td>';
-                                    }
-                                    foreach ( $test['testinfo']['extract_csi'] as $csi_param )
-                                    {
-                                        if( isset($params) && array_key_exists($csi_param, $params) )
-                                        {
-                                            echo '<td class="even" valign="middle">' . $params[$csi_param] . '</td>';
-                                        }
-                                        else
-                                        {
-                                            echo '<td class="even" valign="middle">&nbsp;</td>';
-                                        }
-                                    }
-                                    echo "</tr>\n";
-                                }
-                            ?>
-                    </table><br>
-                <?php
+                echo '<h3 class="hed_sub">Page Performance Metrics <em>(Run ' . $run . ($cached ? ', Repeat View' : '') . ')</em></h3>';
+
+                $hasRepeats = GetMedianRun($pageData, 1, $median_metric);
+                if ($testResults->countRuns() > 1 || $hasRepeats) {
+                    $runs = $testResults->countRuns() + 1;
+
+                    $useFriendlyUrls = !isset($_REQUEST['end']) && FRIENDLY_URLS;
+                    $endParams = isset($_REQUEST['end']) ? ("end=" . $_REQUEST['end']) : "";
+
+                    echo '<p>View run details: ';
+                    for ($i = 1; $i < $runs; $i++) {
+                        $menuUrlGenerator = UrlGenerator::create($useFriendlyUrls, "", $id, $i, false);
+
+                        $link = $menuUrlGenerator->resultPage("details", $endParams);
+                        if ($hasRepeats) {
+                            $menuUrlGeneratorCached = UrlGenerator::create($useFriendlyUrls, "", $id, $i, true);
+                            $linkCACHED = $menuUrlGeneratorCached->resultPage("details", $endParams);
+                        }
+
+                        echo "<a href=\"$link\"" . ($run === $i && !$cached ? ' aria-current="page"' : '') . ">Run $i</a>";
+                        if ($linkCACHED) {
+                            echo " <a href=\"$linkCACHED\"" . ($run === $i && $cached ? ' aria-current="page"' : '') . ">(Repeat View)</a>";
+                        }
+
+                        if ($i + 1 < $runs) {
+                            echo ", ";
+                        }
+                    }
+                    echo '</p>';
                 }
-                $userTimingTable = new UserTimingHtmlTable($testRunResults);
-                echo $userTimingTable->create();
-
                 ?>
-                <script type="text/javascript">
-                  markUserTime('aft.Detail Table');
-                </script>
+
+
+                <?php
+                $htmlTable = new RunResultHtmlTable($testInfo, $testRunResults);
+                $htmlTable->disableColumns(array(
+                    RunResultHtmlTable::COL_RESULT
+                ));
+                $htmlTable->enableColumns(array(
+                    RunResultHtmlTable::COL_DOC_COMPLETE,
+                    RunResultHtmlTable::COL_DOC_REQUESTS,
+                    RunResultHtmlTable::COL_DOC_BYTES,
+                    RunResultHtmlTable::COL_FULLYLOADED,
+                    RunResultHtmlTable::COL_REQUESTS
+                ));
+                echo $htmlTable->create(true);
+                ?>
+                <?php
+                // Full custom metrics
+                $customPageData = @$pageData[$run][$cached]['custom'];
+                if (!empty($customPageData) && is_array($customPageData)) {
+                    echo view('partials.custommetrics', [
+                        'data' => $pageData[$run][$cached],
+                    ]);
+                }
+
+                if (isset($testRunResults) && !$cached) {
+                    echo '<div class="cruxembed">';
+                    require_once(INCLUDES_PATH . '/include/CrUX.php');
+
+                    InsertCruxHTML($testRunResults);
+
+                    echo '</div>';
+                }
+                ?>
 
                 <?php
                 if ($isMultistep) {
-                    echo "<a name='quicklinks'><h3>Quicklinks</h3></a>\n";
-                    echo "<table id='quicklinks_table'>\n";
+                    echo "<a name='quicklinks'><h3 class='hed_sub'>Quicklinks</h3></a>\n";
+                    echo "<div class='scrollableTable'><table class='pretty details' id='quicklinks_table'>\n";
                     for ($i = 1; $i <= $testRunResults->countSteps(); $i++) {
                         $stepResult = $testRunResults->getStepResult($i);
                         $urlGenerator = $stepResult->createUrlGenerator("", false);
@@ -214,27 +174,26 @@ $page_description = "Website performance test details$testLabel";
                         echo "<td><a href='#request_headers_$stepSuffix'>Request Headers</a></td>";
                         echo "<td><a href='" . $urlGenerator->stepDetailPage("customWaterfall", "width=930") . "'>Customize Waterfall</a></td>";
                         echo "<td><a href='" . $urlGenerator->stepDetailPage("pageimages") . "'>All Images</a></td>";
+                        echo "<td><a href='" . $urlGenerator->stepDetailPage("http2_dependencies") . "'>HTTP/2 Dependency Graph</a></td>";
                         echo "</tr>";
                     }
-                    echo "</table>\n<br>\n";
+                    echo "</table></div>\n";
                     $accordionHelper = new AccordionHtmlHelper($testRunResults);
                 }
                 ?>
 
-                <div style="text-align:center;">
-                <h3 name="waterfall_view">Waterfall View</h3>
-                <?php
+                <div>
+                    <h3 class="hed_sub" name="waterfall_view">Waterfall View</h3>
+                    <?php
                     if ($isMultistep) {
                         echo $accordionHelper->createAccordion("waterfall_view", "waterfall");
                     } else {
-                        $enableCsi = (array_key_exists('enable_google_csi', $settings) && $settings['enable_google_csi']);
-                        $waterfallSnippet = new WaterfallViewHtmlSnippet($testInfo, $testRunResults->getStepResult(1), $enableCsi);
+                        $waterfallSnippet = new WaterfallViewHtmlSnippet($testInfo, $testRunResults->getStepResult(1));
                         echo $waterfallSnippet->create();
                     }
-                ?>
-                <br>
-                <br>
-                <h3 name="connection_view">Connection View</h3>
+                    ?>
+
+                    <h3 class="hed_sub" name="connection_view">Connection View</h3>
                     <?php
                     if ($isMultistep) {
                         echo $accordionHelper->createAccordion("connection_view", "connection");
@@ -244,106 +203,160 @@ $page_description = "Website performance test details$testLabel";
                     }
                     ?>
                 </div>
-                <br><br>
-                <?php include('./ads/details_middle.inc'); ?>
 
-                <br>
-                <h3 name="request_details_view">Request Details</h3>
+                <h3 class="hed_sub" name="request_details_view">Request Details</h3>
                 <?php
-                    if ($isMultistep) {
-                        echo $accordionHelper->createAccordion("request_details", "requestDetails", "initDetailsTable");
-                    } else {
-                        $useLinks = !$settings['nolinks'];
-                        $requestDetailsSnippet = new RequestDetailsHtmlSnippet($testInfo, $testRunResults->getStepResult(1), $useLinks);
-                        echo $requestDetailsSnippet->create();
-                    }
+                if ($isMultistep) {
+                    echo $accordionHelper->createAccordion("request_details", "requestDetails", "initDetailsTable");
+                } else {
+                    $useLinks = !GetSetting('nolinks');
+                    $requestDetailsSnippet = new RequestDetailsHtmlSnippet($testInfo, $testRunResults->getStepResult(1), $useLinks);
+                    echo $requestDetailsSnippet->create();
+                }
                 ?>
 
-                <br>
-                <?php include('./ads/details_bottom.inc'); ?>
-                <br>
-                <?php
-                    echo '';
-                    if (isset($test) && is_array($test) && isset($test['testinfo']['testerDNS']))
-                        echo "<p>Test Machine DNS Server(s): {$test['testinfo']['testerDNS']}</p>\n";
 
-                    if ($isMultistep) {
-                        echo "<br><h3 name=\"request_headers_view\" class='center'>Request Headers</h3>\n";
-                        echo $accordionHelper->createAccordion("request_headers", "requestHeaders", "initHeaderRequestExpander");
-                    } else {
-                        $requestHeadersSnippet = new RequestHeadersHtmlSnippet($testRunResults->getStepResult(1), $useLinks);
-                        $snippet = $requestHeadersSnippet->create();
-                        if ($snippet) {
-                            echo '<div id="headers">';
-                            echo '<br><hr><h2>Request Headers</h2>';
-                            echo $snippet;
-                            echo '</div>';
-                        }
+                <?php
+                echo '';
+                if (isset($test) && is_array($test) && isset($test['testinfo']['testerDNS'])) {
+                    echo "<p>Test Machine DNS Server(s): {$test['testinfo']['testerDNS']}</p>\n";
+                }
+
+                if ($isMultistep) {
+                    echo "<h3 class=\"hed_sub\" name=\"request_headers_view\" class='center'>Request Headers</h3>\n";
+                    echo $accordionHelper->createAccordion("request_headers", "requestHeaders", "initHeaderRequestExpander");
+                } else {
+                    $requestHeadersSnippet = new RequestHeadersHtmlSnippet($testRunResults->getStepResult(1), $useLinks);
+                    $snippet = $requestHeadersSnippet->create();
+                    if ($snippet) {
+                        echo '<div id="headers">';
+                        echo '<h3 class="hed_sub">Request Headers</h3>';
+                        echo $snippet;
+                        echo '</div>';
                     }
+                }
                 ?>
             </div>
-
-            <?php include('footer.inc'); ?>
         </div>
-        <a href="#top" id="back_to_top">Back to top</a>
 
+    </div>
+    <?php include('footer.inc'); ?>
+
+    </div>
+    </div>
+
+    <div id="requestBlockingSettings" class="inactive">
         <?php
-        if ($isMultistep) {
-          echo '<script type="text/javascript" src="/js/jk-navigation.js"></script>';
-          echo '<script type="text/javascript" src="/js/accordion.js"></script>';
-          $testId = $testInfo->getId();
-          $testRun = $testRunResults->getRunNumber();
-          echo '<script type="text/javascript">';
-          echo "var accordionHandler = new AccordionHandler('$testId', $testRun);";
-          echo '</script>';
+        if (
+            !$headless && gz_is_file("$testPath/testinfo.json")
+            && !array_key_exists('published', $test['testinfo'])
+            && ($isOwner || !$test['testinfo']['sensitive'])
+            && (!isset($test['testinfo']['type']) || !strlen($test['testinfo']['type']))
+        ) {
+            // load the secret key (if there is one)
+            $secret = GetServerSecret();
+            if (!isset($secret)) {
+                $secret = '';
+            }
+            createForm('requestBlockingForm', 'Run with Blocked', $id, $owner, $secret);
         }
         ?>
-        <script type="text/javascript">
+    </div>
+    <?php
+    if ($isMultistep) {
+        echo '<script src="/assets/js/jk-navigation.js"></script>';
+        echo '<script src="/assets/js/accordion.js"></script>';
+        $testId = $testInfo->getId();
+        $testRun = $testRunResults->getRunNumber();
+        echo '<script>';
+        echo "var accordionHandler = new AccordionHandler('$testId', $testRun);";
+        echo '</script>';
+    }
+    ?>
+    <script>
         function expandRequest(targetNode) {
-          if (targetNode.length) {
-            var div_to_expand = $('#' + targetNode.attr('data-target-id'));
+            if (targetNode.length) {
+                var div_to_expand = $('#' + targetNode.attr('data-target-id'));
 
-            if (div_to_expand.is(":visible")) {
-                div_to_expand.hide();
-                targetNode.html('+' + targetNode.html().substring(1));
-            } else {
-                div_to_expand.show();
-                targetNode.html('-' + targetNode.html().substring(1));
+                if (div_to_expand.is(":visible")) {
+                    div_to_expand.hide();
+                    targetNode.removeAttr("data-expanded");
+                    //targetNode.html('+' + targetNode.html().substring(1));
+                } else {
+                    div_to_expand.show();
+                    targetNode.attr("data-expanded", "true");
+                    //targetNode.html('-' + targetNode.html().substring(1));
+                }
             }
-          }
         }
 
         function initDetailsTable(targetNode) {
-             $(targetNode).find(".tableDetails").tablesorter({
-                headers: { 3: { sorter:'currency' } ,
-                    4: { sorter:'currency' } ,
-                    5: { sorter:'currency' } ,
-                    6: { sorter:'currency' } ,
-                    7: { sorter:'currency' } ,
-                    8: { sorter:'currency' } ,
-                    9: { sorter:'currency' }
+            $.tablesorter.addParser({
+                id: 'priorities',
+                is: () => false,
+                format: (s) => {
+                    return s.toLowerCase()
+                        .replace(/highest/, 4)
+                        .replace(/high/, 3)
+                        .replace(/medium/, 2)
+                        .replace(/low/, 1)
+                        .replace(/lowest/, 0);
+                },
+                type: 'numeric'
+            });
+            $(targetNode).find(".tableDetails").tablesorter({
+                headers: {
+                    3: {
+                        sorter: 'priorities'
+                    },
+                    4: {
+                        sorter: 'currency'
+                    },
+                    5: {
+                        sorter: 'currency'
+                    },
+                    6: {
+                        sorter: 'currency'
+                    },
+                    7: {
+                        sorter: 'currency'
+                    },
+                    8: {
+                        sorter: 'currency'
+                    },
+                    9: {
+                        sorter: 'currency'
+                    },
+                    10: {
+                        sorter: 'currency'
+                    },
+                    11: {
+                        sorter: 'currency'
+                    }
                 }
             });
         }
 
         function initHeaderRequestExpander(targetNode) {
-            $(targetNode).find('.a_request').click(function () {
+            $(targetNode).find('.a_request').click(function() {
                 expandRequest($(this));
             });
         }
 
         function expandAll(step) {
-          var expandAllNode = $("#step" + step + "_all");
-          var expandText = expandAllNode.html();
-          var doShow = expandText.substring(0, 1) == "+";
-          expandAllNode.html(doShow ? "- Collapse All" : "+ Expand All");
-          $("#header_details_step" + step + " .header_details").each(function(index) {
-            $(this).toggle(doShow);
-          });
+            var expandAllNode = $("#step" + step + "_all");
+            var expandText = expandAllNode.html();
+            var doShow = expandText.substring(0, 1) == "+";
+            expandAllNode.html(doShow ? "- Collapse All" : "+ Expand All");
+            $("#header_details_step" + step + " .header_details").each(function(index) {
+                $(this).toggle(doShow);
+            });
         }
 
         function scrollTo(node) {
-            $('html, body').animate({scrollTop: node.offset().top + 'px'}, 'fast');
+            $('html, body').animate({
+                scrollTop: node.offset().top + 'px'
+            }, 'fast');
         }
 
         function handleRequestHash() {
@@ -357,22 +370,29 @@ $page_description = "Website performance test details$testLabel";
                 stepNum = 1;
                 doExpandAll = true;
             }
-           if (stepNum <= 0) {
-           return;
-           }
+            if (stepNum <= 0) {
+                return;
+            }
             var expand = function() {
                 var scrollToNode = $(window.location.hash);
                 if (doExpandAll) {
                     scrollToNode = $("#step" + stepNum + "_all");
                     expandAll(stepNum);
                 } else {
-                    expandRequest(scrollToNode);
+                    if (scrollToNode.length > 0) {
+                        expandRequest(scrollToNode);
+                    }
+
                 }
-                scrollTo(scrollToNode);
+                if (scrollToNode.length > 0) {
+                    scrollTo(scrollToNode);
+                }
             };
             var slide_opener = $("#request_headers_step" + stepNum);
             if (slide_opener.length) {
-              accordionHandler.toggleAccordion(slide_opener, true, expand);
+                <?php if ($isMultistep) { ?>
+                    accordionHandler.toggleAccordion(slide_opener, true, expand);
+                <?php } ?>
             } else {
                 expand();
             }
@@ -383,7 +403,9 @@ $page_description = "Website performance test details$testLabel";
             if (!hash) {
                 var defaultAccordion = $("#waterfall_view_step1");
                 if (defaultAccordion.length) {
-                  accordionHandler.toggleAccordion(defaultAccordion);
+                    <?php if ($isMultistep) { ?>
+                        accordionHandler.toggleAccordion(defaultAccordion);
+                    <?php } ?>
                 }
                 return;
             }
@@ -391,7 +413,9 @@ $page_description = "Website performance test details$testLabel";
                 hash.startsWith("#connection_view_step") ||
                 hash.startsWith("#request_details_step") ||
                 hash.startsWith("#request_headers_step")) {
-              accordionHandler.handleHash();
+                <?php if ($isMultistep) { ?>
+                    accordionHandler.handleHash();
+                <?php } ?>
             }
             handleRequestHash();
         }
@@ -403,16 +427,17 @@ $page_description = "Website performance test details$testLabel";
             initDetailsTable($(document));
             initHeaderRequestExpander($(document));
             <?php if ($isMultistep) { ?>
-              accordionHandler.connect();
+                accordionHandler.connect();
             <?php } ?>
             handleHash();
         });
         window.onhashchange = handleHash;
 
         <?php
-        include "waterfall.js";
+        include "assets/js/waterfall.js";
         ?>
-        </script>
-    </body>
-</html>
+    </script>
 
+</body>
+
+</html>

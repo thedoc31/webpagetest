@@ -1,10 +1,27 @@
 <?php
 
+// Copyright 2020 Catchpoint Systems Inc.
+// Use of this source code is governed by the Polyform Shield 1.0.0 license that can be
+// found in the LICENSE.md file.
+
+$rbIcon = imagecreatefrompng(WWW_PATH . '/assets/images/render-block-icon.png');
+$nsIcon = imagecreatefrompng(WWW_PATH . '/assets/images/not-secure-icon.png');
+
 /**
 * Draw label next to a request like "10 ms (404)".
 */
-function DrawRequestTimeLabelBackground($im, $request, $x1, $y1, $x2, $y2, $min_x, $max_x,
-                              $font, $font_width, $font_color, $bg_color) {
+function DrawRequestTimeLabelBackground(
+    $im,
+    $request,
+    $x1,
+    $y1,
+    $x2,
+    $y2,
+    $min_x,
+    $max_x,
+    $font_width,
+    $bg_color
+) {
     $label = $request['all_ms'] . ' ms';
     $code = $request['responseCode'];
     if ($code >= 300 || $code < 0) {
@@ -21,13 +38,30 @@ function DrawRequestTimeLabelBackground($im, $request, $x1, $y1, $x2, $y2, $min_
     if ($label_x >= $min_x) {
         // Draw text background to erase any grid/event lines.
         imagefilledrectangle(
-            $im, $label_x, $y1, $label_x + $label_width, $y2,
-            $bg_color);
+            $im,
+            $label_x,
+            $y1,
+            $label_x + $label_width,
+            $y2,
+            $bg_color
+        );
     }
 }
 
-function DrawRequestTimeLabel($im, $request, $x1, $y1, $x2, $y2, $min_x, $max_x,
-                              $font, $font_width, $font_color, $bg_color) {
+function DrawRequestTimeLabel(
+    $im,
+    $request,
+    $x1,
+    $y1,
+    $x2,
+    $y2,
+    $min_x,
+    $max_x,
+    $font,
+    $font_width,
+    $font_color,
+    $bg_color
+) {
     $label = $request['all_ms'] . ' ms';
     $code = $request['responseCode'];
     if ($code >= 300 || $code < 0) {
@@ -57,18 +91,25 @@ function DrawRequestTimeLabel($im, $request, $x1, $y1, $x2, $y2, $min_x, $max_x,
 * @param mixed $y2
 * @param array $color   RGB color
 */
-function DrawBar(&$im, $x1, $y1, $x2, $y2, $color, $shaded) {
-  if ($shaded) {
-    $bar_colors = GetBarColors($color, $y2 - $y1 + 1);
-    for ($i = 0; $i < count($bar_colors); $i++) {
-      list($r, $g, $b) = $bar_colors[$i];
-      imageline($im, $x1, $y1 + $i, $x2, $y1 + $i,
-                GetColor($im, $r, $g, $b));
+function DrawBar(&$im, $x1, $y1, $x2, $y2, $color, $shaded)
+{
+    if ($shaded) {
+        $bar_colors = GetBarColors($color, $y2 - $y1 + 1);
+        for ($i = 0; $i < count($bar_colors); $i++) {
+            list($r, $g, $b) = $bar_colors[$i];
+            imageline(
+                $im,
+                $x1,
+                $y1 + $i,
+                $x2,
+                $y1 + $i,
+                GetColor($im, $r, $g, $b)
+            );
+        }
+    } else {
+        list($r, $g, $b) = $color;
+        imagefilledrectangle($im, $x1, $y1, $x2, $y2, GetColor($im, $r, $g, $b));
     }
-  } else {
-    list($r, $g, $b) = $color;
-    imagefilledrectangle($im, $x1, $y1, $x2, $y2, GetColor($im, $r, $g, $b));
-  }
 }
 
 /**
@@ -82,7 +123,8 @@ function DrawBar(&$im, $x1, $y1, $x2, $y2, $color, $shaded) {
 *         array( 0, 204,  0)
 *         );
 */
-function GetBarColors($rgb, $num) {
+function GetBarColors($rgb, $num)
+{
     if ($num > 4) {
         $hi_rgb = ScaleRgb($rgb, 0.3);
         $lo_rgb = ScaleRgb($rgb, -0.2);
@@ -100,7 +142,8 @@ function GetBarColors($rgb, $num) {
 /**
 * Return array of $num interpolated colors from $rgb1 to $rgb2, inclusive.
 */
-function InterpolateColors($rgb1, $rgb2, $num) {
+function InterpolateColors($rgb1, $rgb2, $num)
+{
     $colors = array();
     if ($num >= 1) {
         $colors[] = $rgb1;
@@ -128,7 +171,8 @@ function InterpolateColors($rgb1, $rgb2, $num) {
 * @param array rgb color (e.g. array(255, 127, 0))
 * @param float $factor -1, 0, 1 give black, no change, and white, respectively.
 */
-function ScaleRgb($rgb, $factor) {
+function ScaleRgb($rgb, $factor)
+{
     $scale_rgb = array();
     $factor = (double)max(-1, min(1, $factor));
 
@@ -164,12 +208,16 @@ function GetColor(&$im, $r, $g, $b)
 /**
 * Load the performance data (CPU, Memory and Bandwidth)
 */
-function LoadPerfData($file_name, $use_cpu, $use_bw, $use_mem = false, $max_bw = 0) {
+function LoadPerfData($file_name, $use_cpu, $use_bw, $use_mem = false, $max_bw = 0)
+{
     $perfs = array(
         'cpu' => array('data' => array()),
         'bw' => array('data' => array()),
         'mem' => array('data' => array())
         );
+    $has_mem = false;
+    $has_cpu = false;
+    $has_bw = false;
     $data = gz_file($file_name, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
     if ($data && count($data) > 1) {
         foreach ($data as $row_num => $row) {
@@ -178,17 +226,38 @@ function LoadPerfData($file_name, $use_cpu, $use_bw, $use_mem = false, $max_bw =
                 if (count($fields) >= 4) {
                     $time = $fields[0];
                     if ($use_bw) {
-                        $perfs['bw']['data'][$time] = (int)$fields[1];
+                        $val = (int)$fields[1];
+                        $perfs['bw']['data'][$time] = $val;
+                        if ($val > 0) {
+                            $has_bw = true;
+                        }
                     }
                     if ($use_cpu) {
-                        $perfs['cpu']['data'][$time] = (float)$fields[2];
+                        $val = (float)$fields[2];
+                        $perfs['cpu']['data'][$time] = $val;
+                        if ($val > 0) {
+                            $has_cpu = true;
+                        }
                     }
                     if ($use_mem) {
-                        $perfs['mem']['data'][$time] = (int)$fields[3];
+                        $val = (int)$fields[3];
+                        $perfs['mem']['data'][$time] = $val;
+                        if ($val > 0) {
+                            $has_mem = true;
+                        }
                     }
                 }
             }
         }
+    }
+    if (!$has_bw) {
+        $use_bw = false;
+    }
+    if (!$has_cpu) {
+        $use_cpu = false;
+    }
+    if (!$has_mem) {
+        $use_mem = false;
     }
     // fix any spikiness in the bandwidth data
     if ($max_bw && $use_bw && count($perfs['bw']['data'])) {
@@ -200,7 +269,7 @@ function LoadPerfData($file_name, $use_cpu, $use_bw, $use_mem = false, $max_bw =
             $last_time = 0;
             $last_value = 0;
             krsort($perfs['bw']['data'], SORT_NUMERIC);
-            foreach($perfs['bw']['data'] as $time => $value) {
+            foreach ($perfs['bw']['data'] as $time => $value) {
                 if ($last_time > $time) {
                     $elapsed = $last_time - $time;
                     if ($last_value > $max_bw) {
@@ -232,12 +301,13 @@ function LoadPerfData($file_name, $use_cpu, $use_bw, $use_mem = false, $max_bw =
     }
     if ($use_bw) {
         $count = count($perfs['bw']['data']);
-        if ($max_bw)
-          $perfs['bw']['max'] = $max_bw;
-        elseif ($count)
-          $perfs['bw']['max'] = max($perfs['bw']['data']);
-        else
-          $perfs['bw']['max'] = 0;
+        if ($max_bw) {
+            $perfs['bw']['max'] = $max_bw;
+        } elseif ($count) {
+            $perfs['bw']['max'] = max($perfs['bw']['data']);
+        } else {
+            $perfs['bw']['max'] = 0;
+        }
         $perfs['bw']['count'] = $count;
     } else {
         unset($perfs['bw']);
@@ -254,34 +324,53 @@ function LoadPerfData($file_name, $use_cpu, $use_bw, $use_mem = false, $max_bw =
 
 
 /**
-* Draw a lock icon
+* Draw an insecure icon
 *
 * @param mixed $im
 * @param mixed $x
 * @param mixed $y
 */
-function DrawLock($im, $x, $y, $width, $height)
+function DrawNotSecure($im, $x, $y, $width, $height)
 {
+    global $nsIcon;
+
     // give it some margins
     $width -= 4;
     $height -= 4;
-    $top = $y + ($height * .4);
-    $boxHeight = ($height - ($top - $y)) - ($height * .1);
-    $lock = GetColor($im, 255, 216, 0);
-    $black = GetColor($im, 0, 0, 0);
-    imageellipse($im, $x + ($width / 2), $top, $width - 2, $width, $black);
-    imageellipse($im, $x + ($width / 2), $top, $width - 3, $width - 1, $black);
-    imageellipse($im, $x + ($width / 2), $top, $width - 4, $width - 2, $black);
-    imagefilledrectangle($im, $x, $top, $x + $width, $top + $boxHeight, $lock);
-    imagerectangle($im, $x, $top, $x + $width, $top + $boxHeight, $black);
-}
 
+    imagecopyresampled($im, $nsIcon, $x, $y, 0, 0, $width, $height, 17, 17);
+}
+/**
+* Draw a render blocking icon
+*
+* @param mixed $im
+* @param mixed $x
+* @param mixed $y
+*/
+function DrawBlocking($im, $x, $y, $width, $height)
+{
+    global $rbIcon;
+    // give it some margins
+    $width -= 4;
+    $height -= 4;
+
+    $rbIcon = imagecreatefrompng('./assets/images/render-block-icon.png');
+    imagecopyresampled($im, $rbIcon, $x, $y, 0, 0, $width, $height, 17, 17);
+}
 /**
 * Fake some lines to make it look like text in a thumbnail
 *
 */
-function ThumbnailText(&$im, $x1, $y1, $width, $height,
-                       $label, $font_width, $color) {
+function ThumbnailText(
+    &$im,
+    $x1,
+    $y1,
+    $width,
+    $height,
+    $label,
+    $font_width,
+    $color
+) {
     $x2 = $x1 + min($width, $font_width * strlen($label));
     $y2 = $y1 + $height;
     for ($y = $y1 + 1; $y < $y2; $y++) {
@@ -292,5 +381,3 @@ function ThumbnailText(&$im, $x1, $y1, $width, $height,
         }
     }
 }
-
-?>

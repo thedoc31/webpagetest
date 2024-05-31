@@ -1,18 +1,9 @@
 <?php
+// Copyright 2020 Catchpoint Systems Inc.
+// Use of this source code is governed by the Polyform Shield 1.0.0 license that can be
+// found in the LICENSE.md file.
 require_once('./common_lib.inc');
 require_once('./lib/aws/aws-autoloader.php');
-
-if(extension_loaded('newrelic')) {
-    newrelic_add_custom_tracer('EC2_StartInstanceIfNeeded');
-    newrelic_add_custom_tracer('EC2_StartInstance');
-    newrelic_add_custom_tracer('EC2_TerminateIdleInstances');
-    newrelic_add_custom_tracer('EC2_GetRunningInstances');
-    newrelic_add_custom_tracer('EC2_SendInstancesOffline');
-    newrelic_add_custom_tracer('EC2_StartNeededInstances');
-    newrelic_add_custom_tracer('EC2_TerminateInstance');
-    newrelic_add_custom_tracer('EC2_LaunchInstance');
-}
-
 
 /**
 * Tests are pending for the given location, start instances as necessary
@@ -123,6 +114,8 @@ function EC2_StartInstance($ami) {
         $user_data .= " wpt_password=$wpt_password";
     if (isset($wpt_validcertificate) && strlen($wpt_validcertificate))
         $user_data .= " wpt_validcertificate=$wpt_validcertificate";
+    if (isset($wpt_url) && strlen($wpt_url))
+        $user_data .= " wpt_url=$wpt_url";
     if (!$size)
       $size = 'm3.medium';
     $started = EC2_LaunchInstance($region, $ami, $size, $user_data, $loc);
@@ -565,6 +558,14 @@ function EC2_LaunchInstance($region, $ami, $size, $user_data, $loc) {
         'UserData' => base64_encode ( $user_data )
       );
 
+      // add/modify IAM instance profile(s) if present in config
+      $iamInstanceProfile = GetSetting('EC2.iamInstanceProfile');
+      if ($iamInstanceProfile) {
+        $ec2_options['IamInstanceProfile'] = array(
+          'Name' => $iamInstanceProfile
+        );
+      }
+
       //add/modify the SecurityGroupIds if present in config
       $secGroups = GetSetting("EC2.$region.securityGroup");
       if ($secGroups) {
@@ -578,6 +579,12 @@ function EC2_LaunchInstance($region, $ami, $size, $user_data, $loc) {
       $subnetId = GetSetting("EC2.$region.subnetId");
       if ($subnetId) {
         $ec2_options['SubnetId'] = $subnetId;
+      }
+	    
+      //add/modify the KeyName if present in config
+      $keyName = GetSetting("EC2.$region.keyName");
+      if ($keyName) {
+        $ec2_options['KeyName'] = $keyName;
       }
 
       $response = $ec2->runInstances ( $ec2_options );

@@ -1,12 +1,16 @@
 <?php
+
+// Copyright 2020 Catchpoint Systems Inc.
+// Use of this source code is governed by the Polyform Shield 1.0.0 license that can be
+// found in the LICENSE.md file.
 ignore_user_abort(true);
 set_time_limit(36000);
 chdir('..');
-header ("Content-type: text/plain");
+header("Content-type: text/plain");
 if (is_file('./settings/checkTesters.inc')) {
     if (include('./settings/checkTesters.inc')) {
-        if( isset($agents) && is_array($agents)) {
-            foreach($agents as $url => &$locations) {
+        if (isset($agents) && is_array($agents)) {
+            foreach ($agents as $url => &$locations) {
                 echo "Checking $url\n";
                 CheckLocation($url, $locations);
             }
@@ -14,17 +18,18 @@ if (is_file('./settings/checkTesters.inc')) {
     }
 }
 
-function CheckLocation($url, &$locations) {
+function CheckLocation($url, &$locations)
+{
     $doc = new MyDOMDocument();
-    if( $doc ) {
+    if ($doc) {
         $response = file_get_contents($url);
-        if( strlen($response) ) {
-            $response = preg_replace('/[^(\x20-\x7F)]*/','', $response);
+        if (strlen($response)) {
+            $response = preg_replace('/[^(\x20-\x7F)]*/', '', $response);
             $doc->loadXML($response);
             $data = $doc->toArray();
             $status = (int)$data['response']['statusCode'];
-            if( $status == 200 ) {
-                foreach($locations as $location => &$testers) {
+            if ($status == 200) {
+                foreach ($locations as $location => &$testers) {
                     foreach ($testers as $tester => &$cmd) {
                         CheckTester($data, $location, $tester, $cmd);
                     }
@@ -34,12 +39,13 @@ function CheckLocation($url, &$locations) {
     }
 }
 
-Function CheckTester(&$data, $location, $tester, $cmd) {
+function CheckTester(&$data, $location, $tester, $cmd)
+{
     echo "Checking $location/$tester...";
     $found = false;
     $elapsed = 0;
     // find the matching location
-    foreach($data['response']['data']['location'] as &$locInfo) {
+    foreach ($data['response']['data']['location'] as &$locInfo) {
         if ($locInfo['id'] == $location) {
             foreach ($locInfo['testers']['tester'] as &$testerInfo) {
                 if ($testerInfo['pc'] == $tester) {
@@ -76,9 +82,9 @@ class MyDOMDocument extends DOMDocument
             foreach ($oDomNode->childNodes as $oChildNode) {
                 // how many of these child nodes do we have?
                 // this will give us a clue as to what the result structure should be
-                $oChildNodeList = $oDomNode->getElementsByTagName($oChildNode->nodeName); 
+                $oChildNodeList = $oDomNode->getElementsByTagName($oChildNode->nodeName);
                 $iChildCount = 0;
-                // there are x number of childs in this node that have the same tag name
+                // there are x number of children in this node that have the same tag name
                 // however, we are only interested in the # of siblings with the same tag name
                 foreach ($oChildNodeList as $oNode) {
                     if ($oNode->parentNode->isSameNode($oChildNode->parentNode)) {
@@ -104,7 +110,7 @@ class MyDOMDocument extends DOMDocument
         // get our attributes if we have any
         $arAttributes = array();
         if ($oDomNode->hasAttributes()) {
-            foreach ($oDomNode->attributes as $sAttrName=>$oAttrNode) {
+            foreach ($oDomNode->attributes as $oAttrNode) {
                 // retain namespace prefixes
                 $arAttributes["@{$oAttrNode->nodeName}"] = $oAttrNode->nodeValue;
             }
@@ -119,8 +125,7 @@ class MyDOMDocument extends DOMDocument
             }
             $mResult = array_merge($mResult, $arAttributes);
         }
-        $arResult = array($oDomNode->nodeName=>$mResult);
+        $arResult = array($oDomNode->nodeName => $mResult);
         return $arResult;
     }
 }
-?>

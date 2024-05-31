@@ -1,34 +1,57 @@
 <?php
-require_once __DIR__ . '/optimization_detail.inc.php';
-require_once __DIR__ . '/breakdown.inc';
-require_once __DIR__ . '/testStatus.inc';
+
+// Copyright 2020 Catchpoint Systems Inc.
+// Use of this source code is governed by the Polyform Shield 1.0.0 license that can be
+// found in the LICENSE.md file.
 require_once __DIR__ . '/common.inc';
-require_once __DIR__ . '/include/TestInfo.php';
-require_once __DIR__ . '/include/TestResults.php';
-require_once __DIR__ . '/include/RunResultHtmlTable.php';
-require_once __DIR__ . '/include/TestResultsHtmlTables.php';
+
+require_once INCLUDES_PATH . '/optimization_detail.inc.php';
+require_once INCLUDES_PATH . '/breakdown.inc';
+require_once INCLUDES_PATH . '/testStatus.inc';
+require_once INCLUDES_PATH . '/common.inc';
+require_once INCLUDES_PATH . '/include/TestInfo.php';
+require_once INCLUDES_PATH . '/include/TestResults.php';
+require_once INCLUDES_PATH . '/include/RunResultHtmlTable.php';
+require_once INCLUDES_PATH . '/include/TestResultsHtmlTables.php';
 
 $breakdown = array();
 $testComplete = true;
 $status = GetTestStatus($id, false);
-if( $status['statusCode'] < 200 ) 
+if ($status['statusCode'] < 200) {
     $testComplete = false;
+}
 $headless = false;
-if (array_key_exists('headless', $settings) && $settings['headless']) {
+if (GetSetting('headless')) {
     $headless = true;
 }
 
 $testInfo = TestInfo::fromFiles($testPath);
 $testResults = TestResults::fromFiles($testInfo);
 
-$page_keywords = array('Results','Webpagetest','Website Speed Test','Page Speed');
+
+$testStepResult = TestStepResult::fromFiles($testInfo, $run, $cached, $step);
+$requests = $testStepResult->getRequests();
+
+$blockingReqs = array();
+
+foreach ($requests as $request) {
+    if ($request['renderBlocking'] === "blocking" && $request['contentType'] === "application/javascript") {
+        array_push($blockingReqs, $request['host'] . $request['url']);
+    }
+}
+
+
+
+
+$page_keywords = array('Results','WebPageTest','Website Speed Test','Page Speed');
 $page_description = "Website performance test result$testLabel.";
 ?>
 <!DOCTYPE html>
-<html>
+<html lang="en-us">
     <head>
-        <title>WebPagetest Test Result<?php echo $testLabel; ?></title>
-        <style type="text/css">
+        <title><?php echo "$page_title - WebPageTest Result"; ?></title>
+        <script>document.documentElement.classList.add('has-js');</script>
+        <style>
             tr.stepResultRow.jkActive td.resultCell {
                 border-left: 2px #181741 solid;
             }
@@ -36,215 +59,184 @@ $page_description = "Website performance test result$testLabel.";
                 height: 2em;
             }
         </style>
-        <script language="JavaScript">
-            <?php
-                $wpt_host = trim($_SERVER['HTTP_HOST']);
-                echo "var wpt_host='$wpt_host';\n";
-            ?>
-            if( window.location.host.length && wpt_host.length && window.location.host != wpt_host )
-                window.location = document.location.protocol + '//' + wpt_host + window.location.pathname;
-        </script>
-        <?php if( !$testComplete ) { 
+        <?php if (!$testComplete) {
                 $autoRefresh = true;
-        ?>
+            ?>
         <noscript>
         <meta http-equiv="refresh" content="30" />
         </noscript>
-        <?php } ?>
-        <?php $gaTemplate = 'Test Result'; include ('head.inc'); ?>
+        <?php }
+        $useScreenshot = true;
+         $socialTitle = "WebPageTest Performance Test Results";
+         $socialDesc = "Check out these web performance test results on WebPageTest.org: ";
+        ?>
+        <?php include('head.inc'); ?>
+
     </head>
-    <body>
-        <div class="page">
+    <body class="result result-summary <?php if ($req_screenshot) {
+        echo ' screenshot';
+                                       } ?>">
             <?php
             $tab = 'Test Result';
-            $subtab = 'Summary';
+            $subtab = 'Performance Summary';
             include 'header.inc';
             ?>
-            <div id="result">
-            <?php 
-            if( !$testComplete ) 
-            {
-                ?>
+
+
+            <div class="results_main_contain">
+        <div class="results_main">
+
+        <?php
+        if (!$testComplete) {
+            ?>
                 <p class="left">
-                <br>
-                <?php 
-                    if ($settings['nolinks']) {
-                        echo "Url: $url<br>\n";
-                    } else {
-                        echo "Url: <a rel=\"nofollow\" href=\"$url\">$url</a><br>\n";
-                    }
-                    echo "From: {$test['test']['location']}<br>\n";
-                    echo GetTestInfoHtml();
-                ?>
+            <?php
+            if (GetSetting('nolinks')) {
+                echo "URL: $url<br>\n";
+            } else {
+                echo "URL: <a rel=\"nofollow\" href=\"$url\">$url</a><br>\n";
+            }
+                echo "From: {$test['test']['location']}<br>\n";
+                echo GetTestInfoHtml();
+            ?>
                 </p>
-                <?php 
+                <?php
                 $expected = $test['test']['runs'];
                 $available = $testResults->countRuns();
                 echo "<h3>Test is partially complete ($available of $expected tests).<br>This page will refresh as tests complete.</h3>";
                 echo "<script>\n";
                 echo "var availableTests=$available;\n";
                 echo "</script>\n";
-            }
-            else 
-            { 
+        } else {
             ?>
-            <div id="download">
-                <div id="testinfo">
-                    <?php
-                    $show_sensitive = false;
-                    echo GetTestInfoHtml();
-                    if( !$headless && gz_is_file("$testPath/testinfo.json") 
-                        && !array_key_exists('published', $test['testinfo'])
-                        && ($isOwner || !$test['testinfo']['sensitive'])
-                        && (!isset($test['testinfo']['type']) || !strlen($test['testinfo']['type'])) )
-                    {
-                        $siteKey = GetSetting("recaptcha_site_key", "");
-                        if (!isset($uid) && !isset($user) && !isset($this_user) && strlen($siteKey)) {
-                          echo "<script src=\"https://www.google.com/recaptcha/api.js\" async defer></script>\n";
-                          ?>
-                          <script>
-                          function onRecaptchaSubmit(token) {
-                            document.getElementById("urlEntry").submit();
-                          }
-                          </script>
-                          <?php
-                        }
-                        // load the secret key (if there is one)
-                        $secret = '';
-                        $keys = parse_ini_file('./settings/keys.ini', true);
-                        if( $keys && isset($keys['server']) && isset($keys['server']['secret']) )
-                          $secret = trim($keys['server']['secret']);
 
-                        echo '<form name="urlEntry" id="urlEntry" action="/runtest.php" method="POST" enctype="multipart/form-data">';
-                        echo "\n<input type=\"hidden\" name=\"resubmit\" value=\"$id\">\n";
-                        echo '<input type="hidden" name="vo" value="' . htmlspecialchars($owner) . "\">\n";
-                        if( strlen($secret) ){
-                          $hashStr = $secret;
-                          $hashStr .= $_SERVER['HTTP_USER_AGENT'];
-                          $hashStr .= $owner;
-                          
-                          $now = gmdate('c');
-                          echo "<input type=\"hidden\" name=\"vd\" value=\"$now\">\n";
-                          $hashStr .= $now;
-                          
-                          $hmac = sha1($hashStr);
-                          echo "<input type=\"hidden\" name=\"vh\" value=\"$hmac\">\n";
-                        }
-                        if (strlen($siteKey)) {
-                          echo "<button data-sitekey=\"$siteKey\" data-callback='onRecaptchaSubmit' class=\"g-recaptcha\">Re-run the test</button>";
-                        } else {
-                          echo '<input type="submit" value="Re-run the test">';
-                        }
-                        echo "\n</form>\n";
-                    }
-                    ?>
-                </div>
+
+
+           <div class="results_and_command">
+
+
+
+
+
+           <div class="results_header">
+                <h2>Performance Summary</h2>
+                <div class="summary_opps">
+
+
                 <?php
-                    $fvMedian = $testResults->getMedianRunNumber($median_metric, false);
-                    $rvMedian = $testResults->getMedianRunNumber($median_metric, true);
+                include INCLUDES_PATH . '/experiments/common.inc';
+                include INCLUDES_PATH . '/experiments/summary.inc';
 
-                    // create a friendlier (unique) name for the fi
-                    $fileUrl = GetFileUrl($url);
-                    if( FRIENDLY_URLS )
-                    {
-                        echo "<a href=\"/result/$id/{$id}_{$fileUrl}_page_data.csv\">Raw page data</a> - ";
-                        echo "<a href=\"/result/$id/{$id}_{$fileUrl}_requests.csv\">Raw object data</a>";
-                    }
-                    else
-                    {
-                        echo "<a href=\"/csv.php?test=$id\">Raw page data</a> - ";
-                        echo "<a href=\"/csv.php?test=$id&requests=1\">Raw object data</a>";
-                    }
-                    echo '<br><a href="/export.php?bodies=1&pretty=1&test=' . $id . '">Export HTTP Archive (.har)</a>';
-		                if( is_dir('./google') && array_key_exists('enable_google_csi', $settings) && $settings['enable_google_csi'] )
-			                echo '<br><a href="/google/view_csi.php?test=' . $id . '">View CSI data</a>';
-                    if (is_file("$testPath/test.log"))
-                        echo "<br><a href=\"/viewlog.php?test=$id\">View Test Log</a>";
-                    if (is_file("$testPath/lighthouse.log.gz"))
-                        echo " - <a href=\"/viewlog.php?test=$id&lighthouse=1\">Lighthouse Test Log</a>";
-                    if( array_key_exists('publishTo', $settings) && $settings['publishTo'] )
-                        echo "<br><a href=\"/publish.php?test=$id\">Publish to {$settings['publishTo']}</a>";
                 ?>
+                <?php if (!isset($experiments_paid) || !$experiments_paid) { ?>
+                <p><span class="opportunities_summary_exps">You have Free Experiments Available!
+                    <?php
+                    if ($tabs && $tabs['Opportunities & Experiments']) {
+                        echo '<a href="' . $tabs['Opportunities & Experiments'] . '">Try them now!</a>';
+                    }
+                    ?></span></p>
+                <?php } ?>
+                </div>
+
+
+
+
+              </div>
+
             </div>
-            <div class="cleared"></div>
+
+
+
+
+
+            <div id="result" class="results_body">
+
+
+
             <div id="average">
                 <?php
                 $is_test_error = $testInfo->isTestError();
-                if ($fvMedian)
-                {
-                    if ($testResults->countRuns() > 1)
-                        echo '<h2>Performance Results (Median Run)</h2>';
-                    $fvRunResults = $testResults->getRunResult($fvMedian, false);
-                    $rvRunResults = $rvMedian ? $testResults->getRunResult($rvMedian, true) : null;
-                    $resultTable = new RunResultHtmlTable($testInfo, $fvRunResults, $rvRunResults);
-                    $resultTable->useLabelLinks(true);
-                    $resultTable->disableColumns(array(
-                      RunResultHtmlTable::COL_ABOVE_THE_FOLD,
-                      RunResultHtmlTable::COL_VISUAL_COMPLETE,
-                      RunResultHtmlTable::COL_RESULT
-                    ));
+                $fvRunResults = $testResults->getRunResult($fvMedian, false);
+                $rvRunResults = $rvMedian ? $testResults->getRunResult($rvMedian, true) : null;
+
+                if ($fvMedian) {
+                      echo '<h3 class="hed_sub">Page Performance Metrics ';
+                      $medianMetrics = array(
+                        "chromeUserTiming.CumulativeLayoutShift" => "Cumulative Layout Shift",
+                        "firstContentfulPaint" => "First Contentful Paint",
+                        "chromeUserTiming.LargestContentfulPaint" => "Largest Contentful Paint",
+                        "fullyLoaded" => "Load Time",
+                        "SpeedIndex" => "Speed Index",
+                        "render" => "Start Render",
+                        "TTFB" => "Time to First Byte",
+                        "TotalBlockingTime" => "Total Blocking Time"
+                      );
+                      if ($medianMetrics[$median_metric]) {
+                          $friendlyMedianMetric = $medianMetrics[$median_metric];
+                      } else {
+                          $friendlyMedianMetric = htmlspecialchars($median_metric);
+                      }
+                      if ($testResults->countRuns() > 1) {
+                          echo '<em>(Based on Median Run by:
+                          <details><summary>' . $friendlyMedianMetric . '</summary>';
+                          echo "<ul>";
+
+                          $url = strtok($_SERVER["REQUEST_URI"], '?');
+                          foreach ($medianMetrics as $key => $value) {
+                              if ($pageData[$run][$cached][$key]) {
+                                  echo "<li><a href='" . $url . "?test=$id&medianMetric=" . $key . "'>" . $value . "</a></li>";
+                              }
+                          }
+                          echo "</ul>";
+
+
+                          echo '</details>)</em>';
+                      }
+                        echo '</h3>';
+
+                        echo '<details class="metrics_shown">
+                          <summary><strong>Note:</strong> Metric availability will vary</summary>
+                          <p><strong>Please note:</strong> Availability of metrics will vary based on the browser being tested. Also, the way a site performs in some conditions may not predict how well it will perform in others, so we encourage testing in a variety of browsers, devices, & locations.</p>
+                          </details>';
+
+                      $resultTable = new RunResultHtmlTable($testInfo, $fvRunResults, $rvRunResults, false, true);
+                      $resultTable->useLabelLinks(true);
+                      $resultTable->disableColumns(array(
+                        RunResultHtmlTable::COL_VISUAL_COMPLETE,
+                        RunResultHtmlTable::COL_COST,
+                        RunResultHtmlTable::COL_FULLYLOADED,
+                        RunResultHtmlTable::COL_REQUESTS,
+                        RunResultHtmlTable::COL_RESULT,
+                      ));
+                      $resultTable->disableCustomMetrics();
                     if (GetSetting('show_cost')) {
-                        $resultTable->enableColumns(array(RunResultHtmlTable::COL_COST));
+                        //$resultTable->enableColumns(array(RunResultHtmlTable::COL_COST));
                     }
-                    echo $resultTable->create();
+                    echo $resultTable->create(true);
 
                     if ($testResults->countRuns() > 1) {
-                        echo "<a href=\"/graph_page_data.php?tests=$id&medianMetric=$median_metric\">Plot Full Results</a>";
+                        $link = '/video/compare.php?tests=';
+                        $repeatlink = '/video/compare.php?tests=';
+                        $cnt = 1;
+                        do {
+                            $link .= $id . '-r:' . $cnt;
+                            $repeatlink .= $id . '-r:' . $cnt . '-c:1';
+                            if ($tests[0]['step']) {
+                                $link .= '-s:' . $test['step'];
+                                $repeatlink .= '-s:' . $test['step'];
+                            }
+                            $link .= ',';
+                            $repeatlink .= ',';
+                            $cnt++;
+                        } while ($cnt <= $testResults->countRuns());
+                        echo "<a href=\"" . substr($link, 0, -1) . "\" class=\"result_plot\">Compare First Views</a>";
+                        if ($rvRunResults) {
+                            echo "<a href=\"" . substr($repeatlink, 0, -1) . "\" class=\"result_plot\">Compare Repeat Views</a>";
+                        }
+                        echo "<a href=\"/graph_page_data.php?tests=$id&medianMetric=$median_metric\" class=\"result_plot\">Plot Full Results</a>";
                     }
                     ?>
-                    <br>
-                <?php
-                    if( is_dir('./google') && isset($test['testinfo']['extract_csi']) && $fvMedian && count($pageData) > 1 )
-		            {
-			        require_once('google/google_lib.inc');
-			        // Draw the table and print the first-view details.
-		    	        $fv_params = ParseCsiInfo($id, $testPath, $fvMedian, false, true);
-		        ?>
-		    <h2>Csi Metrics (Median Run)</h2>
-                    <table id="tableCustomMetrics" class="pretty" align="center" border="1" cellpadding="10" cellspacing="0">
-                    <tr>
-			<th align="center" class="empty" valign="middle" style="border:1px white solid;"></th>
-		<?php
-		    	foreach ( $test['testinfo']['extract_csi'] as $csi_param )
-                       	    echo '<th align="center" class="border" valign="middle" colspan="1">' . $csi_param . '</th>';
-		        echo '</tr><tr>';
-		        echo '<td align="left" class="even" valign="middle">First View';
-                        echo ' (<a href="#run' . $fvMedian . '">Run ' . $fvMedian . '</a>)';
-			foreach ( $test['testinfo']['extract_csi'] as $csi_param )
-			{
-			    if( array_key_exists($csi_param, $fv_params) )
-			    {
-                                echo '<td class="even" valign="middle">' . $fv_params[$csi_param] . '</td>';
-			    }
-			    else
-			    {
-				echo '<td class="even" valign="middle"></td>';
-			    }
-			}
-			// Print the repeat view row.
-			if( $rvMedian )
-			{
-			    echo '</tr><tr>';
-			    $rv_params = ParseCsiInfo($id, $testPath, $rvMedian, true, true);
-                            echo '<td align="left" class="even" valign="middle">Repeat View';
-                            echo ' (<a href="#run' . $rvMedian . '">Run ' . $rvMedian . '</a>)';
-                            foreach ( $test['testinfo']['extract_csi'] as $csi_param )
-                            {
-                                if( array_key_exists($csi_param, $rv_params) )
-                                {
-                                    echo '<td class="even" valign="middle">' . $rv_params[$csi_param] . '</td>';
-                                }
-                                else
-                                {
-                                    echo '<td class="even" valign="middle"></td>';
-                                }
-                            }
-			}
-			echo '</tr>';
-		?>
-		    </table><br>
-		<?php
-		    } // csi
+                    <?php
                 } // fvMedian
                 if (!$fvMedian || $is_test_error) {
                     $error = 'The test completed but there were no successful results.';
@@ -252,11 +244,13 @@ $page_description = "Website performance test result$testLabel.";
                     if ($is_test_error) {
                         $error = 'The test failed to run.';
                         $detail = $test['testinfo']['test_error'];
-                    } elseif(array_key_exists('testinfo', $test) &&
-                             array_key_exists('errors', $test['testinfo'])) {
+                    } elseif (
+                        array_key_exists('testinfo', $test) &&
+                             array_key_exists('errors', $test['testinfo'])
+                    ) {
                         // just grab the first error we find from an individual run
-                        foreach($test['testinfo']['errors'] as &$error_run) {
-                            foreach($error_run as &$error_str) {
+                        foreach ($test['testinfo']['errors'] as &$error_run) {
+                            foreach ($error_run as &$error_str) {
                                 if (strlen($error_str)) {
                                     $error = 'The testing completed but failed.';
                                     $detail = $error_str;
@@ -265,48 +259,60 @@ $page_description = "Website performance test result$testLabel.";
                             }
                         }
                     }
-                    if (!$fvMedian)
-                      echo '<h3>' . htmlspecialchars($error) . '</h3>';
+                    if (!$fvMedian) {
+                        echo '<h3>' . htmlspecialchars($error) . '</h3>';
+                    }
                     if (isset($detail)) {
                         echo '<h4>' . htmlspecialchars($detail) . '</h4>';
                     }
                 }
                 ?>
             </div>
-            <script type="text/javascript">
-              markUserTime('aft.Result Data Table');
-            </script>
-            <?php } ?>
-            <div id="tables" style="text-align:left;">
+
+
+
             <?php
-            if ($testResults->countRuns() > 1)
-                echo '<h3 style="text-align:center;">Test Results</h3>';
-            $tcpDumpView = !empty($settings['tcpdump_view']) ? $settings['tcpdump_view'] : null;
+            if (isset($fvRunResults)) {
+                echo '<div class="cruxembed">';
+                require_once(INCLUDES_PATH . '/include/CrUX.php');
+                InsertCruxHTML($fvRunResults);
+                echo '</div>';
+            }
+            ?>
+        <?php } ?>
+
+
+
+            <div id="tables" style="text-align:left;">
+            <h3 class="hed_sub">Individual Runs</h3>
+
+
+
+            <?php
+            $tcpDumpView = GetSetting('tcpdump_view') ? GetSetting('tcpdump_view') : null;
             $resultTables = new TestResultsHtmlTables($testInfo, $testResults, $testComplete, $median_metric, $tcpDumpView);
             echo $resultTables->create();
             ?>
             </div>
             </div>
+  <?php include(INCLUDES_PATH . '/cta-banner.inc'); ?>
+              </div>
 
-		    <br>
-            <?php if (file_exists('./ads/results_bottom.inc')) include('./ads/results_bottom.inc'); ?>
-		    <br>
-            
             <?php include('footer.inc'); ?>
         </div>
-        <script type="text/javascript" src="/js/jk-navigation.js"></script>
-        <script type="text/javascript">
+        <script src="/assets/js/jk-navigation.js"></script>
+        <script>
             addJKNavigation("tr.stepResultRow");
         </script>
         <?php
         $breakdown = $resultTables->getBreakdown();
         if ($breakdown) {
-        ?>
-          <script type="text/javascript" src="//www.google.com/jsapi"></script>
-          <script type="text/javascript">
-          <?php
-          echo 'var wptBreakdown=' . json_encode($breakdown) . ";\n";
-          ?>
+            ?>
+          <script src="//www.google.com/jsapi"></script>
+          <script>
+            <?php
+            echo 'var wptBreakdown=' . json_encode($breakdown) . ";\n";
+            ?>
 
           google.load("visualization", "1", {packages:["corechart"]});
           google.setOnLoadCallback(drawCharts);
@@ -356,13 +362,13 @@ $page_description = "Website performance test result$testLabel.";
             }
           }
           </script>
-        <?php
+            <?php
         } // $breakdown
 
-        if( !$testComplete ) {
-            echo "<script type=\"text/javascript\">\n";
+        if (!$testComplete) {
+            echo "<script>\n";
             echo "var testId = '$id';\n";
-        ?>
+            ?>
             // polyfill performance.now
             if ("performance" in window == false) {
                 window.performance = {};
@@ -424,7 +430,7 @@ $page_description = "Website performance test result$testLabel.";
             }
             setTimeout('UpdateStatus()', 15000);
           </script>
-        <?php
+            <?php
         }
         ?>
     </body>

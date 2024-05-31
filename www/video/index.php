@@ -1,138 +1,160 @@
 <?php
+
+// Copyright 2020 Catchpoint Systems Inc.
+// Use of this source code is governed by the Polyform Shield 1.0.0 license that can be
+// found in the LICENSE.md file.
 chdir('..');
 include 'common.inc';
+
+$current_user = $request_context->getUser();
+$is_paid = !is_null($current_user) ? $current_user->isPaid() : false;
+
 $loc = GetDefaultLocation();
-$tid= array_key_exists('tid', $_GET) ? $_GET['tid'] : 0;
-$run= array_key_exists('run', $_GET) ? $_GET['run'] : 0;
-$page_keywords = array('Video','comparison','Webpagetest','Website Speed Test');
+$tid = array_key_exists('tid', $_GET) ? $_GET['tid'] : 0;
+$run = array_key_exists('run', $_GET) ? $_GET['run'] : 0;
+$page_keywords = array('Video','comparison','WebPageTest','Website Speed Test');
 $page_description = "Visually compare the performance of multiple websites with a side-by-side video and filmstrip view of the user experience.";
 $profiles = null;
-if (is_file(__DIR__ . '/../settings/profiles.ini'))
-  $profiles = parse_ini_file(__DIR__ . '/../settings/profiles.ini', true);
+$profile_file = __DIR__ . '/../settings/profiles.ini';
+if (file_exists(__DIR__ . '/../settings/common/profiles.ini')) {
+    $profile_file = __DIR__ . '/../settings/common/profiles.ini';
+}
+if (file_exists(__DIR__ . '/../settings/server/profiles.ini')) {
+    $profile_file = __DIR__ . '/../settings/server/profiles.ini';
+}
+if (is_file($profile_file)) {
+    $profiles = parse_ini_file($profile_file, true);
+}
+// load the secret key (if there is one)
+$secret = GetServerSecret();
+if (!isset($secret)) {
+    $secret = '';
+}
 ?>
 
 <!DOCTYPE html>
-<html>
+<html lang="en-us">
     <head>
-        <title>WebPagetest - Visual Comparison</title>
-        <?php $gaTemplate = 'Visual Test'; include ('head.inc'); ?>
+        <title>WebPageTest - Visual Comparison</title>
+        <?php include('head.inc'); ?>
     </head>
-    <body>
-        <div class="page">
-            <?php
-            $siteKey = GetSetting("recaptcha_site_key", "");
-            if (!isset($uid) && !isset($user) && !isset($this_user) && strlen($siteKey)) {
-              echo "<script src=\"https://www.google.com/recaptcha/api.js\" async defer></script>\n";
-              ?>
-              <script>
-              function onRecaptchaSubmit(token) {
-                var form = document.getElementById("urlEntry");
-                if (ValidateInput(form)) {
-                  form.submit();
-                } else {
-                  grecaptcha.reset();
-                }
-              }
-              </script>
-              <?php
-            }
-            $tab = 'Home';
+    <body class="home feature-pro">
+       <?php
+            $tab = 'Start Test';
             include 'header.inc';
-            ?>
+        ?>
+
+<?php include("home_header.php"); ?>
+
+
+<div class="home_content_contain">
+             <div class="home_content">
+
             <form name="urlEntry" id="urlEntry" action="/video/docompare.php" method="POST" onsubmit="return ValidateInput(this)">
 
-            <h2 class="cufon-dincond_black">Test a website's performance</h2>
+                <?php
+                    echo '<input type="hidden" name="vo" value="'.htmlspecialchars($owner).'">';
+                    if (strlen($secret)) {
+                        $hashStr = $secret;
+                        $hashStr .= $_SERVER['HTTP_USER_AGENT'];
+                        $hashStr .= $owner;
 
-            <div id="test_box-container">
-                <ul class="ui-tabs-nav">
-                    <li class="analytical_review"><a href="/">Advanced Testing</a></li>
-                    <?php
-                    if (is_file(__DIR__ . '/../settings/profiles.ini')) {
-                      echo "<li class=\"easy_mode\"><a href=\"/easy.php\">Simple Testing</a></li>";
+                        $now = gmdate('c');
+                        echo '<input type="hidden" name="vd" value="'.$now.'">';
+                        $hashStr .= $now;
+
+                        $hmac = sha1($hashStr);
+                        echo '<input type="hidden" name="vh" value="'.$hmac.'">';
                     }
-                    ?>
-                    <li class="visual_comparison ui-state-default ui-corner-top ui-tabs-selected ui-state-active"><a href="#">Visual Comparison</a></li>
-                    <li class="traceroute"><a href="/traceroute.php">Traceroute</a></li>
-                </ul>
+                ?>
+            <div id="test_box-container" class="home_responsive_test">
+                <?php
+                $currNav = "Visual Comparison";
+                include("testTypesNav.php");
+                ?>
                 <div id="visual_comparison" class="test_box">
+                    <div class="test-box-lede test_main_config">
+                      <div class="test_presets">
+                      <p class="h3">Enter multiple URLs to compare them against each other visually.</p>
 
-                    <p>Enter multiple urls to compare them against each other visually.</p>
-                        <input type="hidden" id="nextid" value="2">
+
+                      <input type="hidden" id="nextid" value="3">
                         <div id="urls">
                             <?php
-                            if( $tid )
-                            {
+                            if ($tid) {
                                 $testPath = './' . GetTestPath($tid);
                                 $pageData = loadAllPageData($testPath);
                                 $url = trim($pageData[1][0]['URL']);
                                 $testInfo = GetTestInfo($tid);
                                 $label = trim($testInfo['label']);
-                                if( strlen($url) )
-                                {
+                                if (strlen($url)) {
                                     echo '<div id="urldiv0" class="urldiv">';
                                     echo "<input type=\"hidden\" id=\"tid\" name=\"tid\" value=\"$tid\">";
                                     echo "<input type=\"hidden\" id=\"run\" name=\"run\" value=\"$run\">";
-                                    echo "Label: <input id=\"tidlabel\" type=\"text\" name=\"tidlabel\" value=\"$label\" style=\"width:10em\"> ";
-                                    echo "URL: <input id=\"tidurl\" type=\"text\" style=\"width:30em\" value=\"$url\" disabled=\"disabled\"> ";
+                                    echo "<label for=\"tidlabel\">Label</label> <input id=\"tidlabel\" type=\"text\" name=\"tidlabel\" value=\"$label\" > ";
+                                    echo "<label for=\"tidurl\">URL</label> <input id=\"tidurl\" type=\"text\" value=\"$url\" disabled=\"disabled\"> ";
                                     echo "<a href='#' onClick='return RemoveUrl(\"#urldiv0\");'>Remove</a>";
                                     echo "</div>\n";
                                 }
                             }
                             ?>
-                            <div id="urldiv1" class="urldiv">
-                                Label: <input id="label1" type="text" name="label[1]" style="width:10em"> 
-                                URL: <input id="url1" type="text" name="url[1]" style="width:30em" onkeypress="if (event.keyCode == 32) {return false;}" > 
+                            <div id="urldiv1" class="urldiv fieldrow">
+                                <label for="label1">Label</label> <input id="label1" type="text" required name="label[1]">
+                                <label for="url1">URL</label> <input id="url1" type="text" required name="url[1]" onkeypress="if (event.keyCode == 32) {return false;}" >
                                 <a href='#' onClick='return RemoveUrl("#urldiv1");'>Remove</a>
                             </div>
+                            <div id="urldiv2" class="urldiv fieldrow">
+                                <label for="label2">Label</label> <input id="label2" type="text" required name="label[2]">
+                                <label for="url2">URL</label> <input id="url2" type="text" required name="url[2]" onkeypress="if (event.keyCode == 32) {return false;}" >
+                                <a href='#' onClick='return RemoveUrl("#urldiv2");'>Remove</a>
+                            </div>
                         </div>
-                        <br>
-                        <button onclick="return AddUrl();">Add</button> another page to the comparison.
-                        <br>
-                        <br>
-                        <br>
-                        <br>
-                        <ul>
+                        <button class="addBtn" onclick="return AddUrl();">Add URL</button>
+
+                        <ul class="input_fields">
                         <?php
                         if (isset($profiles) && is_array($profiles) && count($profiles)) {
-                          echo '<li>';
-                          echo '<label for="profile">Test Configuration:</label>';
-                          echo '<select name="profile" id="profile" onchange="profileChanged()">';
-                          foreach($profiles as $name => $profile) {
-                            $selected = '';
-                            if ($name == $_COOKIE['testProfile'])
-                              $selected = 'selected';
-                            echo "<option value=\"$name\" $selected>{$profile['label']}</option>";
-                          }
-                          if (isset($lastGroup))
-                              echo "</optgroup>";
-                          echo '</select>';
-                          echo '</li>';
-                          echo '<br>';
-                          echo '<li>';
-                          echo '<div id="description"></div>';
-                          echo '</li>';
-                          echo '</ul>';
+                            echo '<li>';
+                            echo '<label for="profile">Test Configuration:</label>';
+                            echo '<select name="profile" id="profile" onchange="profileChanged()">';
+                            foreach ($profiles as $name => $profile) {
+                                $selected = '';
+                                if ($name == $_COOKIE['testProfile']) {
+                                    $selected = 'selected';
+                                }
+                                echo "<option value=\"$name\" $selected>{$profile['label']}</option>";
+                            }
+                            if (isset($lastGroup)) {
+                                echo "</optgroup>";
+                            }
+                            echo '</select>';
+                            echo '</li>';
+                            echo '<li id="description"></li>';
+                            echo '</ul>';
                         }
                         ?>
-                        <p id="footnote" class="cleared">For each URL, 3 first-view tests will be run from '<?php echo $loc['label']; ?>' and the median run will be used for comparison.  
-                        The tests will also be publically available.  If you would like to test with different settings, submit your tests individually from the 
-                        <a href="/">main test page</a>.</p>
+
+
+                      <?php if ($is_paid) : ?>
+                          <div>
+                              <label for="private"><input type="checkbox" name="private" id="private" class="checkbox"> Make Test Private <small>Private tests are only visible to your account</small></label>
+                          </div>
+                      <?php endif; ?>
+
+                      </div>
+                      <div>
+                        <input type="submit" name="submit" value="Start Test &#8594;" class="start_test">
                     </div>
+
+
+                    </div>
+                    <p class="footnote">For each URL, 3 first-view tests will be run from '<?php echo $loc['label']; ?>' and the median run will be used for comparison.
+                        If you would like to test with different settings, submit your tests individually from the
+                        <a href="/">main test page</a>.</p>
                 </div>
 
-                <div id="start_test-container">
-                  <?php
-                  if (strlen($siteKey)) {
-                    echo "<p><button data-sitekey=\"$siteKey\" data-callback='onRecaptchaSubmit' class=\"g-recaptcha start_test\"></button></p>";
-                  } else {
-                    echo '<p><input type="submit" name="submit" value="" class="start_test"></p>';
-                  }
-                  ?>
-                </div>
-                <div class="cleared"></div>
-                
-                <script type="text/javascript">
-                <?php 
+                <script>
+                <?php
                   echo "var profiles = " . json_encode($profiles) . ";\n";
                 ?>
                 var wptStorage = window.localStorage || {};
@@ -150,7 +172,7 @@ if (is_file(__DIR__ . '/../settings/profiles.ini'))
                   if (profiles[profile] !== undefined) {
                     var d = new Date();
                     d.setTime(d.getTime() + (365*24*60*60*1000));
-                    document.cookie = "testProfile=" + profile + ";" + "expires=" + d.toUTCString() + ";path=/";          
+                    document.cookie = "testProfile=" + profile + ";" + "expires=" + d.toUTCString() + ";path=/";
                     if (profiles[profile]['description'] !== undefined)
                       description = profiles[profile]['description'];
                   }
@@ -159,10 +181,17 @@ if (is_file(__DIR__ . '/../settings/profiles.ini'))
                 profileChanged();
                 </script>
             </form>
-            
+            </div><!--home_content_contain-->
+        </div><!--home_content-->
+
+
+
+            <?php
+            include(__DIR__ . '/../include/home-subsections.inc');
+            ?>
             <?php include('footer.inc'); ?>
         </div>
 
-        <script type="text/javascript" src="<?php echo $GLOBALS['cdnPath']; ?>/video/videotest.js"></script> 
+        <script src="<?php echo $GLOBALS['cdnPath']; ?>/video/videotest.js"></script>
     </body>
 </html>
