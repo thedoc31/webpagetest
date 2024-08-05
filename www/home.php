@@ -638,12 +638,6 @@ if (!is_null($request_context->getUser()) && $request_context->getUser()->isPaid
                                                         <small>Firefox and Chromium-based browsers only</small>
                                                     </label>
                                                 </li>
-                                                <li>
-                                                    <input type="checkbox" name="disableJXL" id="disableJXL" class="checkbox" style="float: left;width: auto;">
-                                                    <label for="disableJXL" class="auto_width">Disable JPEG XL image support<br />
-                                                        <small>Firefox and Chromium-based browsers only</small>
-                                                    </label>
-                                                </li>
                                                 <?php if (GetSetting('fullSizeVideoOn')) { ?>
                                                     <li>
                                                         <label for="full_size_video" class="auto_width">
@@ -906,7 +900,7 @@ if (!is_null($request_context->getUser()) && $request_context->getUser()->isPaid
                                         <div id="spof" class="test_subbox ui-tabs-hide">
                                             <p>
                                                 Simulate failure of specified domains. This is done by re-routing all requests for
-                                                the domains to <a href="https://blog.patrickmeenan.com/2011/10/testing-for-frontend-spof.html" target="_blank" rel="noopener">blackhole.webpagetest.org</a> which will silently drop all requests.
+                                                the domains to <a href="https://docs.webpagetest.org/spof/" target="_blank" rel="noopener">blackhole.webpagetest.org</a> which will silently drop all requests.
                                             </p>
                                             <p>
                                                 <label for="spof_hosts" class="full_width">
