@@ -45,6 +45,7 @@ if ($block_list && strlen($block_list) && strlen($pc)) {
     $block = explode(',', $block_list);
     if (in_array($pc, $block)) {
         header("HTTP/1.1 403 Unauthorized");
+        exit();
     }
 }
 
@@ -285,6 +286,16 @@ function GetJob()
     $workDir = "./work/jobs/$location";
     $locInfo = GetLocationInfo($location);
     $locKey = GetSetting('location_key', '');
+    
+    if (array_key_exists('ips', $locInfo)) {
+        $tester_ip = $_SERVER['REMOTE_ADDR'];
+        $ips = explode(',', $locInfo['ips']);
+        if (!in_array($tester_ip, $ips)) {
+            header("HTTP/1.1 403 Unauthorized");
+            exit();
+        }
+    }
+
     if (isset($locInfo) && is_array($locInfo) && isset($locInfo['key'])) {
         $locKey = $locInfo['key'];
     }
